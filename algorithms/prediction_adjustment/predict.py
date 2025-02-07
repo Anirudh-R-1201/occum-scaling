@@ -83,7 +83,10 @@ def main():
         prediction = algorithm_input.current_traffic   
         algorithm_input.current_traffic = avg_current_traffic
 
-    _ = json.dumps(algorithm_input.to_dict())
+    # Update the base JSON with the new current_traffic value
+    base_json = json.loads(stdin)
+    base_json["currentTraffic"] = algorithm_input.current_traffic
+    json.dumps(base_json)
 
     # Convert traffic prediction to replica count by dividing by traffic per replica
     replicas = prediction / algorithm_input.traffic_per_replica if algorithm_input.traffic_per_replica > 0 else prediction
