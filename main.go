@@ -49,7 +49,7 @@ import (
 	"github.com/jthomperoo/predictive-horizontal-pod-autoscaler/internal/prediction/holtwinters"
 	"github.com/jthomperoo/predictive-horizontal-pod-autoscaler/internal/prediction/linear"
 	"github.com/anirudh-r-1201/occum-scaling/internal/prediction/occum"
-	"github.com/your-org/occum-scaling/internal/traffic/prometheus"
+	"github.com/anirudh-r-1201/occum-scaling/internal/traffic/prometheus"
 	//+kubebuilder:scaffold:imports
 )
 

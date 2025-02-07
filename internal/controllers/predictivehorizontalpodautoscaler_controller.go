@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/jthomperoo/predictive-horizontal-pod-autoscaler/api/v1alpha1"
-	"github.com/your-org/occum-scaling/internal/traffic"
+	"github.com/anirudh-r-1201/occum-scaling/internal/traffic"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
