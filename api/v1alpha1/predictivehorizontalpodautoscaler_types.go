@@ -35,6 +35,7 @@ const (
 const (
 	TypeHoltWinters = "HoltWinters"
 	TypeLinear      = "Linear"
+	TypeOccum       = "Occum"
 )
 
 const (
@@ -121,11 +122,49 @@ type HoltWinters struct {
 	RuntimeTuningFetchHook *HookDefinition `json:"runtimeTuningFetchHook"`
 }
 
+// TimestampedTraffic represents traffic measurement paired with the time it was recorded
+type TimestampedTraffic struct {
+	// time is when the traffic measurement was taken
+	Time *metav1.Time `json:"time"`
+	// traffic is the measured traffic value
+	Traffic float64 `json:"traffic"`
+}
+
+// ModelHistory is the data stored for a single model's history
+type ModelHistory struct {
+	// type is the type of the model the history is for
+	Type string `json:"type"`
+	// syncPeriodsPassed is the number of sync periods passed since last model run
+	SyncPeriodsPassed int `json:"syncPeriodsPassed"`
+	// replicaHistory is a list of timestamped replicas (used by Linear and HoltWinters models)
+	// +optional
+	ReplicaHistory []TimestampedReplicas `json:"replicaHistory,omitempty"`
+	// trafficHistory is a list of timestamped traffic measurements (used by Occum model)
+	// +optional
+	TrafficHistory []TimestampedTraffic `json:"trafficHistory,omitempty"`
+	// startTime is when the model should start applying and recording data
+	// +optional
+	StartTime *metav1.Time `json:"startTime"`
+}
+
+// Occum represents an Occum prediction model configuration
+type Occum struct {
+	// historySize is how many timestamped traffic measurements should be stored
+	// +kubebuilder:validation:Minimum=1
+	HistorySize int `json:"historySize"`
+	// lookAhead is how far in the future should the model predict in seconds
+	// +kubebuilder:validation:Minimum=1
+	LookAhead int `json:"lookAhead"`
+	// trafficPerReplica is the amount of traffic one replica can handle
+	// +kubebuilder:validation:Minimum=0.000001
+	TrafficPerReplica float64 `json:"trafficPerReplica"`
+}
+
 // Model represents a prediction model to use, e.g. a linear regression
 type Model struct {
 	// type is the type of the model, for example 'Linear'. To see a full list of supported model types visit
 	// https://predictive-horizontal-pod-autoscaler.readthedocs.io/en/latest/user-guide/models/.
-	// +kubebuilder:validation:Enum=Linear;HoltWinters
+	// +kubebuilder:validation:Enum=Linear;HoltWinters;Occum
 	Type string `json:"type"`
 
 	// name is the name of the model, this can be any arbitrary name and is just used to distinguish between models if
@@ -173,6 +212,10 @@ type Model struct {
 	// 'HoltWinters'
 	// +optional
 	HoltWinters *HoltWinters `json:"holtWinters"`
+
+	// occum is the configuration to use for the Occum model, it will only be used if the type is set to 'Occum'
+	// +optional
+	Occum *Occum `json:"occum"`
 }
 
 // TimestampedReplicas is a replica count paired with the time that the replica count was created at.
@@ -190,20 +233,10 @@ type PredictiveHorizontalPodAutoscalerData struct {
 	ModelHistories map[string]ModelHistory `json:"modelHistories"`
 }
 
-// ModelHistory is the data stored for a single model's history, with all of the replica data the model is fed to
-// calculate replicas.
-type ModelHistory struct {
-	// type is the type of the model the history is for, useful to check for model mismatches with the data.
-	Type string `json:"type"`
-	// syncPeriodsPassed is the number of sync periods that have passed since the last time this model was used, used
-	// when determining if a model should run based on the perSyncPeriod
-	SyncPeriodsPassed int `json:"syncPeriodsPassed"`
-	// replicaHistory is a list of timestamped replicas, this data is fed into the model to calculate a predicted value.
-	ReplicaHistory []TimestampedReplicas `json:"replicaHistory"`
-	// startTime is the time after which the model should start applying and recording data. If it is before this time
-	// no data will be recorded and the model will be skipped.
-	// +optional
-	StartTime *metav1.Time `json:"startTime"`
+// TrafficMetric defines how to gather traffic metrics
+type TrafficMetric struct {
+	// PrometheusQuery is the PromQL query to get traffic metrics
+	PrometheusQuery string `json:"prometheusQuery"`
 }
 
 // PredictiveHorizontalPodAutoscalerSpec defines the desired state of PredictiveHorizontalPodAutoscaler
@@ -280,6 +313,10 @@ type PredictiveHorizontalPodAutoscalerSpec struct {
 	// +kubebuilder:validation:Enum=maximum;minimum;mean;median
 	// +optional
 	DecisionType *string `json:"decisionType"`
+
+	// TrafficMetric defines how to gather traffic metrics for Occum models
+	// +optional
+	TrafficMetric *TrafficMetric `json:"trafficMetric,omitempty"`
 }
 
 // PredictiveHorizontalPodAutoscalerStatus defines the observed state of PredictiveHorizontalPodAutoscaler

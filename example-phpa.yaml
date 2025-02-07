@@ -1,0 +1,63 @@
+apiVersion: jamiethompson.me/v1alpha1
+kind: PredictiveHorizontalPodAutoscaler
+metadata:
+  name: example-phpa
+  namespace: default
+spec:
+  # Standard HPA-like configuration
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+  minReplicas: 1
+  maxReplicas: 10
+  
+  # Configure how to gather traffic metrics
+  trafficMetric:
+    # Example Prometheus query that returns requests per second
+    prometheusQuery: 'sum(rate(http_requests_total{app="example-app"}[5m]))'
+  
+  # Configure the Occum model
+  models:
+    - name: traffic-based-scaling
+      type: Occum
+      # Run model every 2 sync periods
+      perSyncPeriod: 2
+      occum:
+        # Keep last 30 traffic measurements
+        historySize: 30
+        # Predict 5 minutes into the future
+        lookAhead: 300
+        # Each replica can handle 100 requests per second
+        trafficPerReplica: 100.0
+  
+  # Use maximum value between current metrics and prediction
+  decisionType: maximum
+  
+  # Standard HPA metrics (will be compared with Occum prediction)
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+  
+  # Optional scaling behavior configuration
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max 

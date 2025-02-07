@@ -48,6 +48,8 @@ import (
 	"github.com/jthomperoo/predictive-horizontal-pod-autoscaler/internal/prediction"
 	"github.com/jthomperoo/predictive-horizontal-pod-autoscaler/internal/prediction/holtwinters"
 	"github.com/jthomperoo/predictive-horizontal-pod-autoscaler/internal/prediction/linear"
+	"github.com/anirudh-r-1201/occum-scaling/internal/prediction/occum"
+	"github.com/your-org/occum-scaling/internal/traffic/prometheus"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -127,12 +129,20 @@ func main() {
 	pyRunner := algorithm.NewAlgorithmPython()
 	httpExec := &http.Execute{}
 
+	// Create traffic gatherer
+	trafficGatherer, err := prometheus.NewGatherer("http://prometheus:9090")
+	if err != nil {
+		setupLog.Error(err, "unable to create traffic gatherer")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.PredictiveHorizontalPodAutoscalerReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
 		ScaleClient: scaleClient,
 		Gatherer:    *k8shorizmetrics.NewGatherer(metricsclient, podsclient, cpuInitializationPeriod, initialReadinessDelay),
 		Evaluator:   *k8shorizmetrics.NewEvaluator(tolerance),
+		Traffic:     trafficGatherer,
 		Predicter: &prediction.ModelPredict{
 			Predicters: []prediction.Predicter{
 				&linear.Predict{
@@ -141,6 +151,9 @@ func main() {
 				&holtwinters.Predict{
 					HookExecute: httpExec,
 					Runner:      pyRunner,
+				},
+				&occum.Predict{
+					Runner: pyRunner,
 				},
 			},
 		},
