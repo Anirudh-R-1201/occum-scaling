@@ -16,7 +16,6 @@ spec:
     type: RollingUpdate
   template:
     metadata:
-      creationTimestamp: null
       labels:
         run: php-apache
     spec:
@@ -30,8 +29,15 @@ spec:
         resources:
           limits:
             cpu: 500m
+            memory: 256Mi
           requests:
             cpu: 200m
+            memory: 128Mi
+        env:
+        - name: LOOK_AHEAD
+          value: "5"
+        - name: MAX_REPLICAS 
+          value: "10"
       restartPolicy: Always
 ---
 apiVersion: v1

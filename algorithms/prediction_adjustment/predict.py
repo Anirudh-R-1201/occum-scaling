@@ -1,5 +1,3 @@
-##TO DO convert traffic to replica count??
-
 import sys
 import math
 import json
@@ -11,12 +9,12 @@ from dataclasses_json import dataclass_json, LetterCase
 
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass
-class TrafficData:
+class TimestampedReplica:
     """
-    JSON data representation of traffic measurement at a point in time
+    JSON data representation of a timestamped evaluation
     """
     time: str
-    traffic: float #traffic snapshot
+    replicas: int
 
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass
@@ -25,25 +23,25 @@ class AlgorithmInput:
     JSON data representation of the algorithm input data
     """
     look_ahead: int
-    current_traffic: float
-    historical_traffic: List[TrafficData]
+    current_replicas: int
+    historical_replicas: List[TimestampedReplica]
     current_time: Optional[str] = None
-    traffic_per_replica: float
+    max_replicas: Optional[int] = None
 
-def get_average_traffic_at_time(traffic_data: List[TrafficData], target_time: datetime) -> float:
+def get_average_replicas_at_time(replica_data: List[TimestampedReplica], target_time: datetime) -> float:
     """
-    Calculate average traffic for a specific time of day from historical data
+    Calculate average replicas for a specific time of day from historical data
     """
-    matching_traffic = []
+    matching_replicas = []
     target_minutes = target_time.hour * 60 + target_time.minute
 
-    for data in traffic_data:
+    for data in replica_data:
         data_time = datetime.strptime(data.time, "%Y-%m-%dT%H:%M:%SZ")
         data_minutes = data_time.hour * 60 + data_time.minute
         if data_minutes == target_minutes:
-            matching_traffic.append(data.traffic)
+            matching_replicas.append(data.replicas)
 
-    return sum(matching_traffic) / len(matching_traffic) if matching_traffic else 1.0
+    return sum(matching_replicas) / len(matching_replicas) if matching_replicas else 1.0
 
 def main():
     stdin = sys.stdin.read()
@@ -71,26 +69,28 @@ def main():
 
     future_time = current_time + timedelta(minutes=algorithm_input.look_ahead)
 
-    avg_current_traffic = get_average_traffic_at_time(algorithm_input.historical_traffic, current_time)
-    avg_future_traffic = get_average_traffic_at_time(algorithm_input.historical_traffic, future_time)
+    avg_current_replicas = get_average_replicas_at_time(algorithm_input.historical_replicas, current_time)
+    avg_future_replicas = get_average_replicas_at_time(algorithm_input.historical_replicas, future_time)
  
-    if avg_current_traffic > 0:
-        prediction = (algorithm_input.current_traffic / avg_current_traffic) * avg_future_traffic
+    if avg_current_replicas > 0:
+        prediction = (algorithm_input.current_replicas / avg_current_replicas) * avg_future_replicas
         weight_current, weight_historical = 0.3, 0.7   
-        algorithm_input.current_traffic = (weight_current * algorithm_input.current_traffic + 
-                                                weight_historical * avg_current_traffic)
+        algorithm_input.current_replicas = (weight_current * algorithm_input.current_replicas + 
+                                          weight_historical * avg_current_replicas)
     else:
-        prediction = algorithm_input.current_traffic   
-        algorithm_input.current_traffic = avg_current_traffic
+        prediction = algorithm_input.current_replicas   
+        algorithm_input.current_replicas = avg_current_replicas
 
-    # Update the base JSON with the new current_traffic value
+    # Cap prediction at max_replicas if specified
+    if algorithm_input.max_replicas is not None:
+        prediction = min(prediction, algorithm_input.max_replicas)
+
+    # Update the base JSON with the new current_replicas value
     base_json = json.loads(stdin)
-    base_json["currentTraffic"] = algorithm_input.current_traffic
+    base_json["currentReplicas"] = algorithm_input.current_replicas
     json.dumps(base_json)
 
-    # Convert traffic prediction to replica count by dividing by traffic per replica
-    replicas = prediction / algorithm_input.traffic_per_replica if algorithm_input.traffic_per_replica > 0 else prediction
-    print(math.ceil(replicas), end="")
+    print(math.ceil(prediction), end="")
 
 if __name__ == "__main__":
     main()
