@@ -3,9 +3,9 @@ package occum
 import (
 	"encoding/json"
 	"errors"
-	"math"
 	"sort"
 	"strconv"
+	"time"
 
 	jamiethompsonmev1alpha1 "github.com/jthomperoo/predictive-horizontal-pod-autoscaler/api/v1alpha1"
 )
@@ -17,23 +17,21 @@ const (
 const algorithmPath = "algorithms/prediction_adjustment/predict.py"
 
 type occumParameters struct {
-	LookAhead         int           `json:"lookAhead"`
-	CurrentTraffic    float64       `json:"currentTraffic"`
-	HistoricalTraffic []trafficData `json:"historicalTraffic"`
-	CurrentTime       string        `json:"currentTime,omitempty"`
-	TrafficPerReplica float64       `json:"trafficPerReplica"`
+	LookAhead          int           `json:"lookAhead"`
+	CurrentReplicas    int32         `json:"currentReplicas"`
+	HistoricalReplicas []replicaData `json:"historicalReplicas"`
+	CurrentTime        string        `json:"currentTime,omitempty"`
 }
 
-type trafficData struct {
-	Time    string  `json:"time"`
-	Traffic float64 `json:"traffic"`
+type replicaData struct {
+	Time     string `json:"time"`
+	Replicas int32  `json:"replicas"`
 }
 
 // Config represents an Occum prediction model configuration
 type Config struct {
-	StoredValues      int     `yaml:"storedValues"`
-	LookAhead         int     `yaml:"lookAhead"`
-	TrafficPerReplica float64 `yaml:"trafficPerReplica"`
+	StoredValues int `yaml:"storedValues"`
+	LookAhead    int `yaml:"lookAhead"`
 }
 
 // Runner defines an algorithm runner, allowing algorithms to be run
@@ -56,20 +54,22 @@ func (p *Predict) GetPrediction(model *jamiethompsonmev1alpha1.Model, history *j
 		return 0, errors.New("no traffic history provided for Occum model")
 	}
 
-	// Convert traffic history to the format expected by the Python algorithm
-	historicalTraffic := make([]trafficData, len(history.TrafficHistory))
+	// Convert traffic history to replica history
+	historicalReplicas := make([]replicaData, len(history.TrafficHistory))
 	for i, th := range history.TrafficHistory {
-		historicalTraffic[i] = trafficData{
-			Time:    th.Time.Format("2006-01-02T15:04:05Z"),
-			Traffic: th.Traffic,
+		historicalReplicas[i] = replicaData{
+			Time:     th.Time.Format("2006-01-02T15:04:05Z"),
+			Replicas: int32(th.Traffic), // Using traffic value directly as replica count
 		}
 	}
 
+	currentReplicas := int32(history.TrafficHistory[len(history.TrafficHistory)-1].Traffic)
+
 	parameters, err := json.Marshal(occumParameters{
-		LookAhead:         model.Occum.LookAhead,
-		CurrentTraffic:    history.TrafficHistory[len(history.TrafficHistory)-1].Traffic,
-		HistoricalTraffic: historicalTraffic,
-		TrafficPerReplica: model.Occum.TrafficPerReplica,
+		LookAhead:          model.Occum.LookAhead,
+		CurrentReplicas:    currentReplicas,
+		HistoricalReplicas: historicalReplicas,
+		CurrentTime:        time.Now().UTC().Format("2006-01-02T15:04:05Z"),
 	})
 	if err != nil {
 		return 0, err
@@ -90,7 +90,7 @@ func (p *Predict) GetPrediction(model *jamiethompsonmev1alpha1.Model, history *j
 		return 0, err
 	}
 
-	return int32(math.Ceil(predictedReplicas)), nil
+	return int32(predictedReplicas), nil
 }
 
 func (p *Predict) PruneHistory(model *jamiethompsonmev1alpha1.Model, history *jamiethompsonmev1alpha1.ModelHistory) error {
